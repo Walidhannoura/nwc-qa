@@ -1,0 +1,5 @@
+# Netlify / Cloudflare Pages: كاش طويل لملفات المحرك (40 MB) عشان تتحمل مرة واحدة بس
+/gdal/*
+  Cache-Control: public, max-age=31536000, immutable
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable

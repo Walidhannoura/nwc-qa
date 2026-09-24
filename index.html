@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>فحص جودة بيانات الشبكات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+:root{
+  --paper:#f1f4f5; --card:#ffffff; --ink:#14303f; --muted:#5b6f7a; --rule:#cfd9de;
+  --water:#1d6fa5; --sewer:#7a5a2b; --err:#c41e3a; --err-bg:#fdecef; --ok:#1f7a4d;
+  --accent:var(--water);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"IBM Plex Sans Arabic","Segoe UI",Tahoma,Arial,sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.6}
+.app{display:grid;grid-template-columns:420px 1fr;height:100%}
+.side{background:var(--card);border-inline-end:1px solid var(--rule);overflow-y:auto;padding:26px 26px 28px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:22px;font-weight:600;margin:0 0 4px}
+.lead{margin:0;color:var(--muted)}
+h2{font-size:15px;font-weight:600;margin:0 0 10px}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);border:1px solid var(--rule);border-radius:14px;padding:2px 10px;margin-top:10px}
+.chip i{width:8px;height:8px;border-radius:50%;background:#b8c4ca;display:inline-block}
+.chip.ready i{background:var(--ok)}
+.chip.failed{color:#7d1327;border-color:#efb4be;background:var(--err-bg)}
+.chip.failed i{background:var(--err)}
+.networks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.net{position:relative;border:1px solid var(--rule);border-inline-start-width:5px;border-radius:4px;padding:10px 12px;cursor:pointer;background:#fff}
+.net input{position:absolute;opacity:0}
+.net[data-net=water]{border-inline-start-color:var(--water)}
+.net[data-net=wastewater]{border-inline-start-color:var(--sewer)}
+.net b{display:block;font-weight:600}
+.net small{color:var(--muted);font-size:12.5px;direction:ltr;unicode-bidi:plaintext;display:block}
+.net:has(input:checked){background:#eaf3f9;border-color:var(--water)}
+.net[data-net=wastewater]:has(input:checked){background:#f5eee2;border-color:var(--sewer)}
+.net:has(input:focus-visible){outline:3px solid #7fb3d6;outline-offset:2px}
+.drop{border:2px dashed var(--rule);border-radius:4px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafcfc;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:#f0f7fb}
+.drop:focus-visible{outline:3px solid #7fb3d6;outline-offset:2px}
+.drop .name{font-weight:600;word-break:break-all;direction:ltr;unicode-bidi:plaintext}
+.drop .hint{color:var(--muted);font-size:13px;margin-top:4px}
+button.primary{width:100%;padding:12px 16px;border:0;border-radius:4px;background:var(--ink);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.primary:disabled{background:#9fb0b8;cursor:not-allowed}
+button.primary:focus-visible,button.dl:focus-visible,button.link:focus-visible,tr.row:focus-visible{outline:3px solid #7fb3d6;outline-offset:2px}
+.bar{height:8px;background:#e3eaed;border-radius:4px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.status{margin-top:8px;color:var(--muted);font-size:14px}
+.alert{border:1px solid #efb4be;background:var(--err-bg);color:#7d1327;border-radius:4px;padding:10px 12px}
+.warn{border:1px solid #e9d59a;background:#fdf7e3;color:#6b5210;border-radius:4px;padding:10px 12px;font-size:14px}
+.verdict{font-size:17px;font-weight:600;margin:0}
+.verdict.ok{color:var(--ok)}
+.verdict.bad{color:var(--err)}
+.meta{color:var(--muted);font-size:14px;margin:4px 0 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:start;font-weight:600;color:var(--muted);font-size:13px;padding:6px 8px;border-bottom:1px solid var(--rule)}
+td{padding:9px 8px;border-bottom:1px solid #e6edf0;vertical-align:top}
+td.n{text-align:end;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+tr.row{cursor:pointer}
+tr.row:hover td{background:#f3f7f9}
+tr.row.sel td{background:var(--err-bg)}
+.cat{display:inline-block;font-size:12px;padding:0 6px;border-radius:3px;border:1px solid var(--rule);color:var(--muted);margin-inline-end:6px}
+.dls{display:flex;gap:8px;flex-wrap:wrap}
+button.dl{flex:1;min-width:110px;text-align:center;padding:9px 10px;border:1px solid var(--ink);border-radius:4px;color:var(--ink);background:#fff;font:inherit;font-weight:500;cursor:pointer}
+button.dl:hover:not(:disabled){background:var(--ink);color:#fff}
+button.dl:disabled{opacity:.55;cursor:progress}
+button.link{background:none;border:0;padding:0;color:var(--water);font:inherit;cursor:pointer;text-decoration:underline}
+.contact{display:flex;flex-direction:column;gap:12px;border:1px solid var(--rule);border-radius:6px;padding:14px;background:#fafcfc;margin-top:auto}
+.contact .who{display:flex;align-items:center;gap:12px}
+.avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:600;font-size:20px}
+.contact .nm{font-weight:600;line-height:1.35}
+.contact .tt{color:var(--muted);font-size:13.5px;line-height:1.45}
+a.wa{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:4px;background:#1f7a4d;color:#fff;text-decoration:none;font-weight:600}
+a.wa:hover{background:#186540}
+a.wa:focus-visible{outline:3px solid #7fb3d6;outline-offset:2px}
+.contact:not([hidden]) + .privacy{margin-top:0}
+.privacy{color:var(--muted);font-size:13px;margin-top:auto;border-top:1px solid #e6edf0;padding-top:12px}
+.mapwrap{position:relative;min-height:320px}
+#map{position:absolute;inset:0;background:#dfe7ea;direction:ltr}
+.empty{position:absolute;inset:0;display:grid;place-items:center;z-index:500;pointer-events:none;color:var(--muted);font-size:16px;text-align:center;padding:24px}
+.empty span{background:rgba(255,255,255,.92);padding:10px 16px;border-radius:4px;border:1px solid var(--rule)}
+.leaflet-popup-content{direction:rtl;font-family:inherit;font-size:14px;margin:12px 14px}
+.leaflet-popup-content b{display:block;margin-bottom:4px}
+.leaflet-popup-content ul{margin:0;padding-inline-start:18px}
+.leaflet-popup-content table.attrs{border-collapse:collapse;font-size:12.5px;direction:ltr;margin-top:2px}
+.attrs td{padding:2px 8px 2px 0;border-bottom:1px solid #e6edf0}
+.attrs td:first-child{color:#5b6f7a}
+.leaflet-control-layers{direction:rtl;font-family:inherit;font-size:13.5px}
+.leaflet-control-layers label{display:block}
+[hidden]{display:none!important}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 65vh;height:auto}
+  .side{border-inline-end:0;border-bottom:1px solid var(--rule)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="side">
+    <header>
+      <h1>فحص جودة بيانات الشبكات</h1>
+      <p class="lead">ارفع الـ Geodatabase واستلم تقرير الأخطاء وخريطتها.</p>
+      <span class="chip" id="engine" role="status"><i></i><span id="engine-text">جاري تجهيز المحرك...</span></span>
+    </header>
+
+    <section id="form-sec" aria-labelledby="h-net">
+      <h2 id="h-net">1. نوع الشبكة</h2>
+      <div class="networks" role="radiogroup" aria-labelledby="h-net" id="networks"></div>
+
+      <h2 style="margin-top:20px">2. الملف</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="اختيار ملف">
+        <div class="name" id="fname">اسحب الملف هنا أو اضغط للاختيار</div>
+        <div class="hint" id="fhint">ملف ZIP فيه الـ Geodatabase، أو ملف GeoPackage</div>
+        <input type="file" id="file" accept=".zip,.gpkg" hidden>
+      </div>
+
+      <button class="primary" id="go" style="margin-top:16px" disabled>ابدأ الفحص</button>
+    </section>
+
+    <section id="prog-sec" hidden aria-live="polite">
+      <div class="bar"><i id="bar"></i></div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <div class="alert" id="err" role="alert" hidden></div>
+
+    <section id="res-sec" hidden>
+      <p class="verdict" id="verdict"></p>
+      <p class="meta" id="meta"></p>
+      <div id="warns" style="margin-top:12px;display:grid;gap:8px"></div>
+
+      <h2 style="margin-top:20px">الأخطاء حسب النوع</h2>
+      <table>
+        <thead><tr><th>نوع الخطأ</th><th style="text-align:end">العدد</th></tr></thead>
+        <tbody id="types"></tbody>
+      </table>
+      <p style="margin:8px 0 0"><button class="link" id="showall" hidden>عرض كل الأخطاء على الخريطة</button></p>
+
+      <h2 style="margin-top:20px">التقارير</h2>
+      <div class="dls" id="dls"></div>
+      <p style="margin:14px 0 0"><button class="link" id="again">فحص ملف آخر</button></p>
+    </section>
+
+    <aside class="contact" id="contact" hidden aria-label="للتواصل"></aside>
+
+    <p class="privacy">الفحص بيتم بالكامل على جهازك. الملف مبيتبعتش لأي سيرفر.</p>
+  </main>
+
+  <section class="mapwrap" aria-label="خريطة الأخطاء">
+    <div id="map"></div>
+    <div class="empty" id="mapempty"><span>الخريطة هتظهر هنا بعد الفحص</span></div>
+  </section>
+</div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="gdal/gdal3.js"></script>
+<script src="js/qa-engine.js"></script>
+<script src="js/gdal-reader.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
